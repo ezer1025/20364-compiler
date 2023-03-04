@@ -1,16 +1,60 @@
 
+import os
+import sys
 from consts import *
+from custom_parser import Parser
 from lexer import MatchedToken, PatternToken, Tokenizer
 from symbol_table import SymbolTable
 
 
 def main():
-    pass
+    if len(sys.argv) != 2:
+        print("Usage: python cpq.py <path-to-cpl-source>")
+        exit(-1)
+    
+    input_file_path = sys.argv[1]
+    input_file_no_ext = os.path.splitext(input_file_path)[0]
+    output_file_path = "{}.qud".format(input_file_no_ext)
+
+    with open(input_file_path, "r") as input_file:
+        source = input_file.read()
+        errors, result = compile(source)
+
+        if not errors:
+            with open(output_file_path, "w") as output_file:
+                output_file.write(result)
+                output_file.write("Enosh Zerahia")
+        else:
+            for error in errors:
+                print("Error in line {line_number}: {message}".format(line_number=error.line_number, message=error.message))
+            
+            print("Enosh Zerahia")
+
 
 def compile(input):
-    pass
+    parser = None
+    with open(GRAMMAR_FILE_PATH, "w") as grammar_file:
+        parser = Parser(grammar_file.read())
 
-def prelexer(lexer: Tokenizer):
+    lexer = Tokenizer()
+    add_cpl_symbols(lexer)
+
+    errors, ast = parser.parse(lexer.tokenize(input))
+    
+    if errors:
+        return errors, []
+    
+    errors, symbol_table = SymbolTable.generate_symbol_table(ast)
+
+    if errors:
+        return errors, []
+    
+    
+    
+    return errors, []
+
+
+def add_cpl_symbols(lexer):
     lexer.add_token(PatternToken("break", lambda _: MatchedToken(TOKEN_NAME_BREAK, "break", "")))
     lexer.add_token(PatternToken("case", lambda _: MatchedToken(TOKEN_NAME_CASE, "case", "")))
     lexer.add_token(PatternToken("default", lambda _: MatchedToken(TOKEN_NAME_DEFAULT, "default", "")))

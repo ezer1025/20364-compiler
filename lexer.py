@@ -1,6 +1,6 @@
 from collections import namedtuple
 import re
-from consts import TOKEN_NAME_IGNORE_TOKEN
+from consts import TOKEN_NAME_IGNORE_TOKEN, TOKEN_NAME_INVALID_TOKEN
 
 from exceptions import CPLException
 
@@ -39,7 +39,12 @@ class TokenList:
 class Tokenizer:
     def __init__(self):
         self.pattern_tokens = []
+
+        # newlines, empty strings, comments and invalid token 
         self.add_token(PatternToken(r"\n", self._handle_new_line))
+        self.add_token(PatternToken(r"\s", self._handle_white_spaces))
+        self.add_token(PatternToken(r".{1}", self._handle_invalid_token))
+        self.add_token(PatternToken(r"/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+/", self._handle_new_line))
     
     def add_token(self, token: PatternToken):
         self.pattern_tokens.append(token)
@@ -54,6 +59,12 @@ class Tokenizer:
     def _handle_new_line(self, matching_string):
         self.line_number += matching_string.count("\n")
         return MatchedToken(TOKEN_NAME_IGNORE_TOKEN, matching_string, "")
+
+    def _handle_white_spaces(self, matching_string):
+        return MatchedToken(TOKEN_NAME_IGNORE_TOKEN, matching_string, "")
+    
+    def _handle_invalid_token(self, matching_string):
+        return MatchedToken(TOKEN_NAME_INVALID_TOKEN, matching_string, "")
 
     def _tokenize(self):
         match_tokens = []

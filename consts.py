@@ -1,3 +1,4 @@
+# Token constants
 TOKEN_NAME_IGNORE_TOKEN     = "IGNORE"
 TOKEN_NAME_INVALID_TOKEN    = "INVALID"
 
@@ -33,3 +34,6 @@ TOKEN_NAME_TYPE_INT         = "INT"
 TOKEN_NAME_TYPE_FLOAT       = "FLOAT"
 
 TOKEN_NAME_NUM              = "NUM"
+
+# Others
+GRAMMAR_FILE_PATH           = '.\cpl.lark'

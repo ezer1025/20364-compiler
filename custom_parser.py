@@ -32,7 +32,7 @@ class Parser:
         except UnexpectedToken as e:
             errors.append(UnexpectedTokenException(e.token, e.expected, e.line))
 
-        return result, errors
+        return errors, result
 
 class UnexpectedTokenException(CPLException):
     def __init__(self, found, expected, line_number):
