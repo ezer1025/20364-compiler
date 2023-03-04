@@ -58,7 +58,7 @@ term:               term MULOP factor
                     | factor
 
 factor:             "("expression ")"
-                    | CASE "("expression ")"
+                    | CAST "("expression ")"
                     | ID
                     | NUM
 
