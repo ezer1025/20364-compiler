@@ -1,5 +1,6 @@
 from collections import namedtuple
 import re
+from consts import TOKEN_NAME_IGNORE_TOKEN
 
 from exceptions import CPLException
 
@@ -10,12 +11,12 @@ class PatternToken:
         self.pattern = re.compile(r"^({pattern}).*".format(pattern=pattern), re.MULTILINE)
         self.handler = handler
     
-    def match(self, string):
+    def _match(self, string):
         match = self.pattern.match(string)
         return match.group(1) if match else None
     
     def match_and_handle(self, string):
-        match = self.match(string)
+        match = self._match(string)
         return self.handler(match) if match is not None else None
 
 class TokenList:
@@ -36,9 +37,6 @@ class TokenList:
         return token
 
 class Tokenizer:
-    IGNORE_TOKEN_NAME = "IGNORE"
-    INVALID_SYMBOL_NAME = "INVALID"
-
     def __init__(self):
         self.pattern_tokens = []
         self.add_token(PatternToken(r"\n", self._handle_new_line))
@@ -55,21 +53,21 @@ class Tokenizer:
 
     def _handle_new_line(self, matching_string):
         self.line_number += matching_string.count("\n")
-        return MatchedToken(self.IGNORE_TOKEN_NAME, matching_string, "")
+        return MatchedToken(TOKEN_NAME_IGNORE_TOKEN, matching_string, "")
 
     def _tokenize(self):
         match_tokens = []
 
         while self.cursor < len(self.input):
-            current_token_match_list = filter(lambda r: r is None, map(lambda t: t.match_and_handle(), self.pattern_tokens))
+            current_token_match_list = filter(lambda r: r is not None, map(lambda t: t.match_and_handle(), self.pattern_tokens))
             final_token = max(current_token_match_list, lambda t: len(t.lexeme))
 
             self.cursor += len(final_token.lexeme)
-            if final_token.name != self.IGNORE_TOKEN_NAME:
+            if final_token.name != TOKEN_NAME_IGNORE_TOKEN:
                 match_tokens.append((final_token, self.line_number))
         
         return match_tokens
 
-class InvalidSymbolException(CPLException):
+class InvalidTokenException(CPLException):
     def __init__(self, line_number, token):
-        super().__init__("Syntax Error: Invalid symbol {token}".format(token=token.lexeme), line_number)
+        super().__init__("Invalid token {token}".format(token=token.lexeme), line_number)
