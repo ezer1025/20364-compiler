@@ -1,6 +1,6 @@
 from collections import namedtuple
 from lark import Visitor
-from consts import TOKEN_NAME_ID, TOKEN_NAME_TYPE_INT
+from consts import TOKEN_NAME_ID, TOKEN_NAME_SEMICOLON, TOKEN_NAME_TYPE_INT
 
 from exceptions import CPLException
 
@@ -10,33 +10,46 @@ class SymbolTableVisitor(Visitor):
     def __init__(self, symbol_table):
         self.errors = []
         self.symbol_table = symbol_table
+        self.current_declaration_vars = []
         self._init_declaration_list()
 
     def _init_declaration_list(self):
         self.current_declaration_type = None
-        self.current_declaration_vars = []
+        self.found_type = False
+        self.current_declaration_vars = [(var[0], False) for var in self.current_declaration_vars if var[1] == True]
     
-    def declaration(self, _):
-        for variable in self.current_declaration_vars:
+    def declaration(self, tree):
+        for variable, found_type in self.current_declaration_vars:
             try:
-                self.symbol_table.try_add_symbol(variable.value, self.current_declaration_type, variable.line)
+                if not found_type:
+                    self.symbol_table.try_add_symbol(variable.value, self.current_declaration_type, variable.line)
             except SymbolRedefenitionException as e:
                 self.errors.append(e)
 
         self._init_declaration_list()
-    
+
     def idlist(self, tree):
-        for variable in tree.children:
-            if variable.type == TOKEN_NAME_ID:
-                self.current_declaration_vars.append(variable)
+        if is_lark_token(tree.children[0]):
+            self.current_declaration_vars.append((tree.children[0], self.found_type))
+        else:
+            self.current_declaration_vars.append((tree.children[2], self.found_type))
     
     def type(self, tree):
         type = tree.children[0]
-        if type == TOKEN_NAME_TYPE_INT:
+        self.found_type = True
+        if type.type == TOKEN_NAME_TYPE_INT:
             self.current_declaration_type = SymbolTable.Types.INT
         else:
             self.current_declaration_type = SymbolTable.Types.FLOAT
     
+
+def is_lark_token(obj):
+    try:
+        _, _ = obj.type, obj.value
+        return True
+
+    except AttributeError:
+        return False
 
 class SymbolTable():
     class Types:
@@ -55,6 +68,8 @@ class SymbolTable():
     def try_get_symbol(self, name, line_number):
         if name not in self.symbols:
             raise SymbolUndefinedException(name, line_number)
+        else:
+            return self.symbols[name]
     
     @classmethod
     def generate_symbol_table(self, ast):

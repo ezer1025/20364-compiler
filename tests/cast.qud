@@ -1,0 +1,23 @@
+RASN a 3.2
+IASN j 8
+RTOI t0 a
+IASN i t0
+IPRT i
+IASN t1 j
+IASN i t1
+IPRT i
+IASN i 16
+ITOR t2 i
+RASN a t2
+RPRT a
+RASN b 17.0
+RASN t3 b
+RASN a t3
+RPRT a
+RASN b 18.9
+RTOI t4 b
+ITOR t5 t4
+RASN a t5
+RPRT a
+HALT
+Enosh Zerahia

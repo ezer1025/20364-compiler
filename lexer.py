@@ -14,7 +14,7 @@ class PatternToken:
     def _match(self, string):
         match = self.pattern.match(string)
         return match.group(1) if match else None
-    
+
     def match_and_handle(self, string):
         match = self._match(string)
         return self.handler(match) if match is not None else None
@@ -40,12 +40,6 @@ class Tokenizer:
     def __init__(self):
         self.pattern_tokens = []
 
-        # newlines, empty strings, comments and invalid token 
-        self.add_token(PatternToken(r"\n", self._handle_new_line))
-        self.add_token(PatternToken(r"\s", self._handle_white_spaces))
-        self.add_token(PatternToken(r".{1}", self._handle_invalid_token))
-        self.add_token(PatternToken(r"/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+/", self._handle_new_line))
-    
     def add_token(self, token: PatternToken):
         self.pattern_tokens.append(token)
     
@@ -70,8 +64,14 @@ class Tokenizer:
         match_tokens = []
 
         while self.cursor < len(self.input):
-            current_token_match_list = filter(lambda r: r is not None, map(lambda t: t.match_and_handle(), self.pattern_tokens))
-            final_token = max(current_token_match_list, lambda t: len(t.lexeme))
+            current_token_match_list = []
+            for pattern_token in self.pattern_tokens:
+                input = self.input[self.cursor:]
+                result = pattern_token.match_and_handle(input)
+                if result:
+                    current_token_match_list.append(result)
+
+            final_token = max(current_token_match_list, key=lambda t: len(t.lexeme))
 
             self.cursor += len(final_token.lexeme)
             if final_token.name != TOKEN_NAME_IGNORE_TOKEN:

@@ -3,7 +3,9 @@ import os
 import sys
 from consts import *
 from custom_parser import Parser
+from ir import get_ir
 from lexer import MatchedToken, PatternToken, Tokenizer
+from quad import get_quad
 from symbol_table import SymbolTable
 
 
@@ -22,7 +24,9 @@ def main():
 
         if not errors:
             with open(output_file_path, "w") as output_file:
-                output_file.write(result)
+                for instruction in result:
+                    output_file.write(instruction.code)
+                    output_file.write('\n')
                 output_file.write("Enosh Zerahia")
         else:
             for error in errors:
@@ -33,13 +37,15 @@ def main():
 
 def compile(input):
     parser = None
-    with open(GRAMMAR_FILE_PATH, "w") as grammar_file:
+    with open(GRAMMAR_FILE_PATH, "r") as grammar_file:
         parser = Parser(grammar_file.read())
 
     lexer = Tokenizer()
     add_cpl_symbols(lexer)
 
-    errors, ast = parser.parse(lexer.tokenize(input))
+    tokens = lexer.tokenize(input)
+
+    errors, ast = parser.parse(tokens)
     
     if errors:
         return errors, []
@@ -49,9 +55,11 @@ def compile(input):
     if errors:
         return errors, []
     
+    errors, ir = get_ir(ast, symbol_table)
+
+    quad = get_quad(ir)
     
-    
-    return errors, []
+    return [], quad
 
 
 def add_cpl_symbols(lexer):
@@ -65,6 +73,13 @@ def add_cpl_symbols(lexer):
     lexer.add_token(PatternToken("switch", lambda _: MatchedToken(TOKEN_NAME_SWITCH, "switch", "")))
     lexer.add_token(PatternToken("while", lambda _: MatchedToken(TOKEN_NAME_WHILE, "while", "")))
 
+    lexer.add_token(PatternToken(r"(==|!=|>=|<=|>|<)",  lambda matched_string: MatchedToken(TOKEN_NAME_RELOP, matched_string, matched_string)))
+    lexer.add_token(PatternToken(r"(\+|-){1}", lambda matched_string: MatchedToken(TOKEN_NAME_ADDOP, matched_string, matched_string)))
+    lexer.add_token(PatternToken(r"(\*|\/){1}", lambda matched_string: MatchedToken(TOKEN_NAME_MULOP, matched_string, matched_string)))
+    lexer.add_token(PatternToken(r"\|\|", lambda _: MatchedToken(TOKEN_NAME_OR, "||", "")))
+    lexer.add_token(PatternToken("&&", lambda _: MatchedToken(TOKEN_NAME_AND, "&&", "")))
+    lexer.add_token(PatternToken("!", lambda _: MatchedToken(TOKEN_NAME_NOT, "!", "")))
+
     lexer.add_token(PatternToken(r"\(", lambda _: MatchedToken(TOKEN_NAME_LEFT_PRNTSS, "(", "")))
     lexer.add_token(PatternToken(r"\)", lambda _: MatchedToken(TOKEN_NAME_RIGHT_PRNTSS, ")", "")))
     lexer.add_token(PatternToken("{", lambda _: MatchedToken(TOKEN_NAME_LEFT_BRCKT, "{", "")))
@@ -74,23 +89,21 @@ def add_cpl_symbols(lexer):
     lexer.add_token(PatternToken(";", lambda _: MatchedToken(TOKEN_NAME_SEMICOLON, ";", "")))
     lexer.add_token(PatternToken("=", lambda _: MatchedToken(TOKEN_NAME_EQUALS, "=", "")))
 
-    lexer.add_token(PatternToken(r"==|!=|<|>|>=|<=",  lambda matched_string: MatchedToken(TOKEN_NAME_RELOP, matched_string, matched_string)))
-    lexer.add_token(PatternToken(r"\+|-", lambda matched_string: MatchedToken(TOKEN_NAME_ADDOP, matched_string, matched_string)))
-    lexer.add_token(PatternToken(r"\*|\/", lambda matched_string: MatchedToken(TOKEN_NAME_MULOP, matched_string, matched_string)))
-    lexer.add_token(PatternToken(r"\|\|", lambda _: MatchedToken(TOKEN_NAME_OR, "||", "")))
-    lexer.add_token(PatternToken("&&", lambda _: MatchedToken(TOKEN_NAME_AND, "&&", "")))
-    lexer.add_token(PatternToken("!", lambda _: MatchedToken(TOKEN_NAME_NOT, "!", "")))
 
     lexer.add_token(PatternToken(r"static_cast<(int|float)>", \
         lambda matched_string: MatchedToken(TOKEN_NAME_CAST, matched_string, SymbolTable.Types.INT if matched_string.find("int") != -1 else SymbolTable.Types.FLOAT)))
 
-    lexer.add_token(PatternToken(r"[a-zA-Z][a-zA-Z0-9]*", lambda matched_string: MatchedToken(TOKEN_NAME_ID, matched_string, matched_string)))
     lexer.add_token(PatternToken("int", lambda _: MatchedToken(TOKEN_NAME_TYPE_INT, "int", "")))
     lexer.add_token(PatternToken("float", lambda _: MatchedToken(TOKEN_NAME_TYPE_FLOAT, "float", "")))
+    lexer.add_token(PatternToken("[a-zA-Z][a-zA-Z0-9]*", lambda matched_string: MatchedToken(TOKEN_NAME_ID, matched_string, matched_string)))
 
     lexer.add_token(PatternToken(r"\d+", lambda matched_string: MatchedToken(TOKEN_NAME_NUM, matched_string, int(matched_string))))
-    lexer.add_token(PatternToken(r"\d+.\d+", lambda matched_string: MatchedToken(TOKEN_NAME_NUM, matched_string, float(matched_string))))
+    lexer.add_token(PatternToken(r"\d+\.\d+", lambda matched_string: MatchedToken(TOKEN_NAME_NUM, matched_string, float(matched_string))))
 
+    lexer.add_token(PatternToken(r"\n", lexer._handle_new_line))
+    lexer.add_token(PatternToken(r"\s", lexer._handle_white_spaces))
+    lexer.add_token(PatternToken(r"/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+/", lexer._handle_new_line))
+    lexer.add_token(PatternToken(r".{1}", lexer._handle_invalid_token))
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,34 @@
+IASN b 0
+IEQL t0 b 0
+JMPZ 16 t0
+IINP a
+IGRT t1 a 0
+IEQL t4 a 1000
+ILSS t3 a 1000
+IADD t3 t3 t4
+IGRT t3 t3 0
+IEQL t5 t1 1
+IEQL t5 t3 t5
+JMPZ 15 t5
+IASN b 1
+JUMP 15
+JUMP 2
+IASN ten 1
+IASN b 0
+IGRT t6 a 0
+JMPZ 32 t6
+IDIV t7 a 2
+IMLT t8 t7 2
+ISUB t9 a t8
+IASN temp t9
+IMLT t10 temp ten
+IADD t11 b t10
+IASN b t11
+IMLT t12 ten 10
+IASN ten t12
+IDIV t13 a 2
+IASN a t13
+JUMP 18
+IPRT b
+HALT
+Enosh Zerahia

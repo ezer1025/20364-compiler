@@ -1,0 +1,552 @@
+import uuid
+from enum import Enum
+from lark import Transformer
+from consts import *
+from exceptions import CPLException
+
+from symbol_table import SymbolTable, SymbolUndefinedException
+
+class QuadInstruction:
+    INSTRUCTION_TRANSLATION_TABLE = {
+        ("=", SymbolTable.Types.INT): "IASN",
+        ("=", SymbolTable.Types.FLOAT): "RASN",
+        ("OUTPUT", SymbolTable.Types.INT): "IPRT",
+        ("OUTPUT", SymbolTable.Types.FLOAT): "RPRT",
+        ("INPUT", SymbolTable.Types.INT): "IINP",
+        ("INPUT", SymbolTable.Types.FLOAT): "RINP",
+        ("==", SymbolTable.Types.INT): "IEQL",
+        ("==", SymbolTable.Types.FLOAT): "REQL",
+        ("!=", SymbolTable.Types.INT): "INQL",
+        ("!=", SymbolTable.Types.FLOAT): "RNQL",
+        ("<", SymbolTable.Types.INT): "ILSS",
+        ("<", SymbolTable.Types.FLOAT): "RLSS",
+        (">", SymbolTable.Types.INT): "IGRT",
+        (">", SymbolTable.Types.FLOAT): "RGRT",
+        ("+", SymbolTable.Types.INT): "IADD",
+        ("+", SymbolTable.Types.FLOAT): "RADD",
+        ("-", SymbolTable.Types.INT): "ISUB",
+        ("-", SymbolTable.Types.FLOAT): "RSUB",
+        ("*", SymbolTable.Types.INT): "IMLT",
+        ("*", SymbolTable.Types.FLOAT): "RMLT",
+        ("/", SymbolTable.Types.INT): "IDIV",
+        ("/", SymbolTable.Types.FLOAT): "RDIV",
+        ("CAST", SymbolTable.Types.INT): "RTOI",
+        ("CAST", SymbolTable.Types.FLOAT): "ITOR",
+
+        ("jump", SymbolTable.Types.INT): "JUMP",
+        ("jump_zero", SymbolTable.Types.INT): "JMPZ",
+        ("halt", SymbolTable.Types.INT): "HALT",
+
+        ("label", SymbolTable.Types.INT): "label"
+    }
+
+    def __init__(self, operator, type, dest, first_operand, second_operand):
+        self.operator = operator
+        self.type = type
+        self.destination = dest
+        self.first_operand = first_operand
+        self.second_operarnd = second_operand
+    
+    @property
+    def instruction(self):
+        return self.INSTRUCTION_TRANSLATION_TABLE[(self.operator, self.type)]
+
+    @property
+    def code(self):
+        return "{} {} {} {}".format(self.instruction, self.destination, self.first_operand, self.second_operarnd).strip()
+    
+class TemporaryVariableFactory():
+    counter = 0
+
+    @staticmethod
+    def reset():
+        TemporaryVariableFactory.counter = 0
+    
+    @staticmethod
+    def get():
+        name = "t{}".format(TemporaryVariableFactory.counter)
+        TemporaryVariableFactory.counter += 1
+        return name
+
+class CPLAST2IR(Transformer):
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
+        self.errors = []
+    
+    def start(self, tree):
+        return Program(tree)
+    
+    def stmt_block(self, tree):
+        return StatementBlock(tree)
+
+    def stmtlist(self, tree):
+        return StatementList(tree)
+
+    def stmt(self, tree):
+        return Statement(tree)
+    
+    def assignment_stmt(self, tree):
+        return AssignmentStatement(tree, self.symbol_table)
+    
+    def expression(self, tree):
+        return Expression(tree)
+    
+    def term(self, tree):
+        return Term(tree)
+    
+    def factor(self, tree):
+        return Factor(tree, self.symbol_table)
+    
+    def boolexpr(self, tree):
+        return BoolExpression(tree)
+    
+    def boolterm(self, tree):
+        return BoolTerm(tree)
+    
+    def boolfactor(self, tree):
+        return BoolFactor(tree)
+    
+    def input_stmt(self, tree):
+        return InputStatement(tree, self.symbol_table)
+    
+    def output_stmt(self, tree):
+        return OutputStatement(tree)
+    
+    def if_stmt(self, tree):
+        return IfStatement(tree)
+    
+    def while_stmt(self, tree):
+        return WhileStatement(tree)
+    
+    def switch_stmt(self, tree):
+        return SwitchStatement(tree)
+    
+    def castlist(self, tree):
+        return Caselist(tree)
+    
+    def break_stmt(self, tree):
+        return BreakStatement(tree)
+    
+    def epsilon(self, tree):
+        return Epsilon(tree)
+    
+
+class GrammarVariable:
+    class NODE_TYPES(Enum):
+        NODE_TYPE_EXPRESSION = 1
+        NODE_TYPE_TERM = 2
+        NODE_TYPE_FACTOR = 3
+        NODE_TYPE_BOOL_EXPRESSION = 4
+        NODE_TYPE_BOOL_TERM = 5
+        NODE_TYPE_BOOL_FACTOR = 6
+
+        NODE_TYPE_STATEMENT_LIST = 7
+        NODE_TYPE_CASE_LIST = 8
+
+        EPSILON = 9
+        
+    def __init__(self):
+        self.errors = []
+        self.breaks = set()
+    
+    def get_node_type(self):
+        try:
+            return self.NODE_TYPE
+        except:
+            return None
+    
+    def handle_binary(self, tree):
+        self.fix_binary_operands_types(tree)            
+        self.code.append(QuadInstruction(tree[1].value, self.type, self.value, tree[0].value, tree[2].value))
+    
+    def fix_binary_operands_types(self, tree):
+        self.code = tree[0].code
+        self.code.extend(tree[2].code)
+        self.value = TemporaryVariableFactory.get()
+
+        left_operand = tree[0].value
+        right_operand = tree[2].value
+
+        if tree[0].type != tree[2].type:
+            self.type = SymbolTable.Types.FLOAT
+            temporary_variable = TemporaryVariableFactory.get()
+            conversion_operand = left_operand if tree[0].type == SymbolTable.Types.INT else right_operand
+            self.code.append(QuadInstruction("CAST", self.type, temporary_variable, conversion_operand, ""))
+            tree[0].value, tree[2].value = (temporary_variable, right_operand) if tree[0].type == SymbolTable.Types.INT else (left_operand, temporary_variable)
+        else:
+            self.type = tree[0].type
+
+class Epsilon(GrammarVariable):
+    NODE_TYPE = GrammarVariable.NODE_TYPES.EPSILON
+    def __init__(self, tree):
+        super().__init__()
+
+class Program(GrammarVariable):
+    def __init__(self, tree):
+        super().__init__()
+
+        self.breaks = self.breaks.union(tree[1].breaks)
+        self.code = tree[1].code + [QuadInstruction("halt", SymbolTable.Types.INT, "", "", "")]
+
+        for _break in self.breaks:
+            self.errors.append(SemanticException("Unexpected 'break' statement (outside of 'while'/'switch' statement)", _break.line))
+
+class StatementBlock(GrammarVariable):
+    def __init__(self, tree):
+        super().__init__()
+        
+        self.code = tree[1].code
+        self.breaks = self.breaks.union(tree[1].breaks)
+
+class StatementList(GrammarVariable):
+    NODE_TYPE = GrammarVariable.NODE_TYPES.NODE_TYPE_STATEMENT_LIST
+    def __init__(self, tree):
+        super().__init__()
+
+        if tree[0].get_node_type() == GrammarVariable.NODE_TYPES.NODE_TYPE_STATEMENT_LIST:
+            self.code = tree[0].code + tree[1].code
+            self.breaks = self.breaks.union(tree[0].breaks)
+            self.breaks = self.breaks.union(tree[1].breaks)
+        else:
+            self.code = []
+
+class Statement(GrammarVariable):
+    def __init__(self, tree):
+        super().__init__()
+
+        self.code = tree[0].code
+        self.breaks = self.breaks.union(tree[0].breaks)
+
+class AssignmentStatement(GrammarVariable):
+    def __init__(self, tree, symbol_table):
+        super().__init__()
+
+        id = Factor(tree, symbol_table)
+
+        if id.type == SymbolTable.Types.INT and tree[2].type == SymbolTable.Types.FLOAT:
+            self.errors = [SemanticException("Unable to assign floating point number to integer variable", tree[1].line)]
+            self.code = []
+        else:
+            self.type = id.type
+            self.value = id.value
+            left_operand = tree[2].value
+
+            self.code = tree[2].code
+            
+            if id.type == SymbolTable.Types.FLOAT and tree[2].type == SymbolTable.Types.INT:
+                temporary_variable = TemporaryVariableFactory.get()
+                left_operand = temporary_variable
+                self.code.append(QuadInstruction("CAST", id.type, temporary_variable, tree[2].value, ""))
+
+            self.code.append(QuadInstruction("=", self.type, self.value, left_operand, ""))
+
+class InputStatement(GrammarVariable):
+    def __init__(self, tree, symbol_table):
+        super().__init__()
+
+        tree[2] = Factor([tree[2]], symbol_table)
+        self.type = tree[2].type
+        self.code = tree[2].code
+        self.value = tree[2].value
+
+        self.code.append(QuadInstruction("INPUT", self.type, self.value, "", ""))
+
+class OutputStatement(GrammarVariable):
+    def __init__(self, tree):
+        super().__init__()
+
+        self.type = tree[2].type
+        self.code = tree[2].code
+        self.value = tree[2].value
+
+        self.code.append(QuadInstruction("OUTPUT", self.type, self.value, "", ""))
+
+class IfStatement(GrammarVariable):
+    def __init__(self, tree):
+        super().__init__()
+
+        false_stmt_label = uuid.uuid4().hex
+        end_stmt_label = uuid.uuid4().hex
+
+        self.breaks = self.breaks.union(tree[4].breaks)
+        self.breaks = self.breaks.union(tree[6].breaks)
+
+        self.code = (
+            tree[2].code +
+            [QuadInstruction("jump_zero", SymbolTable.Types.INT, false_stmt_label, tree[2].value, "")] +
+            tree[4].code +
+            [QuadInstruction("jump", SymbolTable.Types.INT, end_stmt_label, "", ""), QuadInstruction("label", SymbolTable.Types.INT, false_stmt_label, "", "")] +
+            tree[6].code +
+            [QuadInstruction("label", SymbolTable.Types.INT, end_stmt_label, "", "")]
+        )
+
+class WhileStatement(GrammarVariable):
+    def __init__(self, tree):
+        super().__init__()
+
+        condition_label = uuid.uuid4().hex
+        end_while_label = uuid.uuid4().hex
+
+        for _break in tree[4].breaks:
+            _break.label = end_while_label
+
+        self.code = (
+            [QuadInstruction("label", SymbolTable.Types.INT, condition_label, "", "")] +
+            tree[2].code +
+            [QuadInstruction("jump_zero", SymbolTable.Types.INT, end_while_label, tree[2].value, "")] +
+            tree[4].code +
+            [QuadInstruction("jump", SymbolTable.Types.INT, condition_label, "", ""), QuadInstruction("label", SymbolTable.Types.INT, end_while_label, "", "")]
+        )
+
+class SwitchStatement(GrammarVariable):
+    def __init__(self, tree):
+        super().__init__()
+        self.code = []
+
+        if tree[2].type != SymbolTable.Types.INT:
+            self.errors = [SemanticException("Invalid switch condition - must be of an integer value", tree[0].line)] 
+        else:
+            end_stmt_label = uuid.uuid4().hex
+            default_stmt_label = uuid.uuid4().hex
+            conditions_labels = { case_number: uuid.uuid4().hex for case_number in tree[5].cases }
+
+            listed_cases = list(tree[5].cases)
+
+            for index, (key, value) in enumerate(tree[5].cases):
+                temporary_variable = TemporaryVariableFactory.get()
+                self.code.extend([QuadInstruction("label", SymbolTable.Types.INT, conditions_labels[key], "", ""), 
+                                  QuadInstruction("==", SymbolTable.Types.INT, temporary_variable, tree[2].value, key)])
+                
+                if index + 1 == len(tree[5].cases):
+                    self.code.append(QuadInstruction("jump_zero", SymbolTable.Types.INT, default_stmt_label, temporary_variable, ""))
+                else:
+                    next_key, _ = listed_cases[index + 1]
+                    self.code.append(QuadInstruction("jump_zero", SymbolTable.Types.INT, conditions_labels[next_key], "", ""))
+                
+                self.code += value.code
+            
+            self.code += (
+                [QuadInstruction("label", SymbolTable.Types.INT, default_stmt_label, "", "")] +
+                tree[8].code +
+                [QuadInstruction("label", SymbolTable.Types.INT, end_stmt_label, "", "")]
+            )
+
+            for _break in tree[5].breaks.union(tree[8].breaks):
+                _break.label = end_stmt_label
+
+
+class Caselist(GrammarVariable):
+    NODE_TYPE = GrammarVariable.NODE_TYPES.NODE_TYPE_CASE_LIST
+
+    def __init__(self, tree, symbol_table):
+        super().__init__()
+        self.code = []
+        
+        self.cases = {}
+
+        if tree[0].get_node_type() == GrammarVariable.NODE_TYPES.NODE_TYPE_CASE_LIST:
+            self.breaks = self.breaks.union(tree[0].breaks)
+            self.breaks = self.breaks.union(tree[4].breaks)
+
+            case_number = Factor([tree[2]], symbol_table)
+
+            if case_number.type != SymbolTable.Types.INT:
+                self.errors = [ SemanticException("Invalid switch case number - must be of an integer value", tree[1].line)]
+            else:
+                self.cases.update(tree[0].cases)
+
+                if case_number.value in self.cases:
+                    self.errors = [SemanticException("Invalid switch case number - case already exist", tree[1].line)]
+                else:
+                    self.cases[case_number.value] = tree[4]
+                    self.code = tree[0].code + tree[4].code
+
+class BreakStatement(GrammarVariable):
+    def __init__(self, tree):
+        super().__init__()
+        self.label = None
+        self.line = tree[0].line
+        self.breaks.add(self)
+    
+    @property
+    def code(self):
+        if self.label:
+            return [QuadInstruction("jump", SymbolTable.Types.INT, self.label, "", "")]
+        else:
+            return [self]
+
+class Expression(GrammarVariable):
+    NODE_TYPE = GrammarVariable.NODE_TYPES.NODE_TYPE_EXPRESSION
+
+    def __init__(self, tree):
+        super().__init__()
+
+        if tree[0].get_node_type() == GrammarVariable.NODE_TYPES.NODE_TYPE_EXPRESSION:
+            self.handle_binary(tree)
+        else:
+            self.type = tree[0].type
+            self.code = tree[0].code
+            self.value = tree[0].value
+
+class Term(GrammarVariable):
+    NODE_TYPE = GrammarVariable.NODE_TYPES.NODE_TYPE_TERM
+
+    def __init__(self, tree):
+        super().__init__()
+
+        if tree[0].get_node_type() == GrammarVariable.NODE_TYPES.NODE_TYPE_TERM:
+            self.handle_binary(tree)
+        else:
+            self.type = tree[0].type
+            self.code = tree[0].code
+            self.value = tree[0].value
+
+class Factor(GrammarVariable):
+    NODE_TYPE = GrammarVariable.NODE_TYPES.NODE_TYPE_FACTOR
+
+    def __init__(self, tree, symbol_table):
+        super().__init__()
+
+        if tree[0].type == TOKEN_NAME_ID:
+            self._handle_id(tree, symbol_table)
+        elif tree[0].type == TOKEN_NAME_NUM:
+            self._handle_num(tree)
+        elif tree[0].type == TOKEN_NAME_CAST:
+            self._handle_cast(tree)
+        elif tree[0].type == TOKEN_NAME_LEFT_PRNTSS:
+            self.code = tree[1].code
+            self.type = tree[1].type
+            self.value = tree[1].value
+
+    def _handle_id(self, tree, symbol_table: SymbolTable):
+        self.code = []
+        try:
+            symbol = symbol_table.try_get_symbol(tree[0].value, tree[0].line)
+            self.type = symbol.type
+            self.value = symbol.name
+        except SymbolUndefinedException as e:
+            self.errors = [e]
+            self.type = None
+            self.value = tree[0].value
+
+    def _handle_num(self, tree):
+        self.code = []
+        self.type = SymbolTable.Types.FLOAT if type(tree[0].value) == float else SymbolTable.Types.INT
+        self.value = float(tree[0].value) if self.type == SymbolTable.Types.FLOAT else int(tree[0].value)
+    
+    def _handle_cast(self, tree):
+        self.type = tree[0].value
+        self.code = tree[2].code
+        self.value = TemporaryVariableFactory.get()
+
+        if self.type != tree[2].type:
+            self.code.append(QuadInstruction(tree[0].type, self.type, self.value, tree[2].value, ""))
+        else:
+            self.code.append(QuadInstruction("=", self.type, self.value, tree[2].value, ""))
+                
+
+class BoolExpression(GrammarVariable):
+    NODE_TYPE = GrammarVariable.NODE_TYPES.NODE_TYPE_BOOL_EXPRESSION
+
+    def __init__(self, tree):
+        super().__init__()
+
+        if tree[0].get_node_type() == GrammarVariable.NODE_TYPES.NODE_TYPE_BOOL_EXPRESSION:
+            self._handle_or(tree)
+        else:
+            self.type = tree[0].type
+            self.code = tree[0].code
+            self.value = tree[0].value
+        
+        self.type = SymbolTable.Types.INT
+
+    def _handle_or(self, tree):
+        self.fix_binary_operands_types(tree)
+        self.code.extend([QuadInstruction("+", self.type, self.value, tree[0].value, tree[2].value), 
+                          QuadInstruction(">", SymbolTable.Types.INT, self.value, self.value, 0)])
+
+class BoolTerm(GrammarVariable):
+    NODE_TYPE = GrammarVariable.NODE_TYPES.NODE_TYPE_BOOL_TERM
+
+    def __init__(self, tree):
+        super().__init__()
+
+        if tree[0].get_node_type() == GrammarVariable.NODE_TYPES.NODE_TYPE_BOOL_TERM:
+            self._handle_and(tree)
+        else:
+            self.type = tree[0].type
+            self.code = tree[0].code
+            self.value = tree[0].value
+        
+        self.type = SymbolTable.Types.INT
+    
+    def _handle_and(self, tree):
+        self.fix_binary_operands_types(tree)
+        temporary_variable = TemporaryVariableFactory.get()
+        self.code.extend([QuadInstruction("==", self.type, temporary_variable, tree[0].value, 1), 
+                          QuadInstruction("==", self.type, self.value, tree[2].value, temporary_variable)])
+
+class BoolFactor(GrammarVariable):
+    NODE_TYPE = GrammarVariable.NODE_TYPES.NODE_TYPE_BOOL_FACTOR
+
+    def __init__(self, tree):
+        super().__init__()
+
+        try:
+            _ = tree[0].get_node_type()
+
+            if tree[1].value == ">=":
+                self.fix_binary_operands_types(tree)
+                self.value = TemporaryVariableFactory.get()
+                temporary_variable = TemporaryVariableFactory.get()
+                
+                self.code.extend([
+                    QuadInstruction("==", tree[0].type, temporary_variable, tree[0].value, tree[2].value),
+                    QuadInstruction(">", tree[0].type, self.value, tree[0].value, tree[2].value),
+                    QuadInstruction("+", SymbolTable.Types.INT, self.value, self.value, temporary_variable), 
+                    QuadInstruction(">", SymbolTable.Types.INT, self.value, self.value, 0)
+                ])
+            elif tree[1].value == "<=":
+                self.fix_binary_operands_types(tree)
+                self.value = TemporaryVariableFactory.get()
+                temporary_variable = TemporaryVariableFactory.get()
+
+                self.code.extend([
+                    QuadInstruction("==", tree[0].type, temporary_variable, tree[0].value, tree[2].value),
+                    QuadInstruction("<", tree[0].type, self.value, tree[0].value, tree[2].value),
+                    QuadInstruction("+", SymbolTable.Types.INT, self.value, self.value, temporary_variable), 
+                    QuadInstruction(">", SymbolTable.Types.INT, self.value, self.value, 0)
+                ])
+            else:
+                self.handle_binary(tree)
+        except:
+            self.type = tree[2].type
+            self.code = tree[2].code
+            self.value = tree[2].value
+
+            self.code.append(QuadInstruction("!=", self.type, self.value, self.value, "1"))
+        
+        self.type = SymbolTable.Types.INT
+        
+
+def get_ir(ast, symbol_table):
+    TemporaryVariableFactory.reset()
+
+    ast_transformer = CPLAST2IR(symbol_table)
+    ir_tree = ast_transformer.transform(ast)
+
+    if ast_transformer.errors:
+        return ast_transformer.errors, []
+
+    ir = []
+    for instruction in ir_tree.code:
+        if type(instruction) == BreakStatement:
+            ir.append(instruction.code[0])
+        else:
+            ir.append(instruction)
+    
+    return None, ir
+
+class SemanticException(CPLException):
+    def __init__(self, message, line_number):
+        super().__init__("Semantic Exception: {message}".format(message=message), line_number)

@@ -1,0 +1,34 @@
+RINP a
+IINP i
+ITOR t1 i
+REQL t3 a t1
+RGRT t2 a t1
+IADD t2 t2 t3
+IGRT t2 t2 0
+JMPZ 14 t2
+ITOR t5 i
+RSUB t4 a t5
+RASN b t4
+RPRT b
+JUMP 17
+ITOR t7 i
+RMLT t6 t7 a
+RPRT t6
+RADD t8 3.0 5.8
+RTOI t9 t8
+IASN i t9
+IPRT i
+IADD t10 3 5
+IASN t11 t10
+IASN i t11
+IPRT i
+IADD t12 3 5
+ITOR t13 t12
+RASN a t13
+RPRT a
+RADD t14 3.0 5.0
+RASN t15 t14
+RASN a t15
+RPRT a
+HALT
+Enosh Zerahia

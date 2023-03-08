@@ -12,14 +12,14 @@ TOKEN_NAME_OUTPUT           = "OUTPUT"
 TOKEN_NAME_SWITCH           = "SWITCH"
 TOKEN_NAME_WHILE            = "WHILE"
 
-TOKEN_NAME_LEFT_PRNTSS      = "("
-TOKEN_NAME_RIGHT_PRNTSS     = ")"
-TOKEN_NAME_LEFT_BRCKT       = "{"
-TOKEN_NAME_RIGHT_BRCKT      = "}"
-TOKEN_NAME_COMMA            = ","
-TOKEN_NAME_COLON            = ":"
-TOKEN_NAME_SEMICOLON        = ";"
-TOKEN_NAME_EQUALS           = "="
+TOKEN_NAME_LEFT_PRNTSS      = "LEFT_PRNTSS"
+TOKEN_NAME_RIGHT_PRNTSS     = "RIGHT_PRNTSS"
+TOKEN_NAME_LEFT_BRCKT       = "LEFT_BRCKT"
+TOKEN_NAME_RIGHT_BRCKT      = "RIGHT_BRCKT"
+TOKEN_NAME_COMMA            = "COMMA"
+TOKEN_NAME_COLON            = "COLON"
+TOKEN_NAME_SEMICOLON        = "SEMICOLON"
+TOKEN_NAME_EQUALS           = "EQUALS"
 
 TOKEN_NAME_RELOP            = "RELOP"
 TOKEN_NAME_ADDOP            = "ADDOP"
@@ -36,4 +36,4 @@ TOKEN_NAME_TYPE_FLOAT       = "FLOAT"
 TOKEN_NAME_NUM              = "NUM"
 
 # Others
-GRAMMAR_FILE_PATH           = '.\cpl.lark'
+GRAMMAR_FILE_PATH           = "D:\\Projects\\Compilers Course\\20364-compiler\\cpl.lark"

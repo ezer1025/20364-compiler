@@ -1,3 +1,4 @@
+from collections import namedtuple
 from lark import Lark, UnexpectedToken
 from lark.lexer import Lexer, Token
 
@@ -5,17 +6,16 @@ from exceptions import CPLException
 from lexer import InvalidTokenException
 from consts import TOKEN_NAME_INVALID_TOKEN
 
-
 class TypeLexer(Lexer):
-    def __init__(self):
-        pass
+    def __init__(self, *args, **kwargs):
+        Lexer.__init__(self)
     
     def lex(self, data):
         for token, line_number in data:
             if token.name == TOKEN_NAME_INVALID_TOKEN:
                 continue
             else:
-                yield Token(token.name, token.attributes, line=line_number)
+                yield Token(token.name, value=token.attributes, line=line_number)
 
 class Parser:
     def __init__(self, grammar):

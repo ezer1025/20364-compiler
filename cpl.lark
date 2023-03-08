@@ -1,15 +1,12 @@
-program:            declarations stmt_block
+start:              declarations stmt_block
 
-declarations:       declarations declarations
-                    | epsilon
+declarations:       declarations declaration | epsilon
 
-declaration:        idlist ":" type ";"
+declaration:        idlist COLON type SEMICOLON
 
-type:               INT 
-                    | FLOAT
+type:               INT | FLOAT
 
-idlist:             idlist "," ID
-                    | ID
+idlist:             idlist COMMA ID | ID
 
 stmt:               assignment_stmt
                     | input_stmt
@@ -20,24 +17,24 @@ stmt:               assignment_stmt
                     | break_stmt
                     | stmt_block
 
-assignment_stmt:    ID "=" expression ";"
+assignment_stmt:    ID EQUALS expression SEMICOLON
 
-input_stmt:         INPUT "("ID ")" ";"
+input_stmt:         INPUT LEFT_PRNTSS ID RIGHT_PRNTSS SEMICOLON
 
-output_stmt:        OUTPUT "(" expression ")" ";"
+output_stmt:        OUTPUT LEFT_PRNTSS expression RIGHT_PRNTSS SEMICOLON
 
-if_stmt:            IF "("boolexpr ")" stmt ELSE stmt
+if_stmt:            IF LEFT_PRNTSS boolexpr RIGHT_PRNTSS stmt ELSE stmt
 
-while_stmt:         WHILE "(" boolexpr ")" stmt
+while_stmt:         WHILE LEFT_PRNTSS boolexpr RIGHT_PRNTSS stmt
 
-switch_stmt:        SWITCH "(" expression ")" "{" caselist DEFAULT ":" stmtlist "}"
+switch_stmt:        SWITCH LEFT_PRNTSS expression RIGHT_PRNTSS LEFT_BRCKT caselist DEFAULT COLON stmtlist RIGHT_BRCKT
 
-caselist:           caselist CASE NUM ":" stmtlist 
+caselist:           caselist CASE NUM COLON stmtlist 
                     | epsilon
 
-break_stmt:         BREAK ";"
+break_stmt:         BREAK SEMICOLON
 
-stmt_block:         "{" stmtlist "}"
+stmt_block:         LEFT_BRCKT stmtlist RIGHT_BRCKT
 
 stmtlist:           stmtlist stmt 
                     | epsilon         
@@ -48,7 +45,7 @@ boolexpr:           boolexpr OR boolterm
 boolterm:           boolterm AND boolfactor
                     | boolfactor
 
-boolfactor:         NOT "("boolexpr ")"
+boolfactor:         NOT LEFT_PRNTSS boolexpr RIGHT_PRNTSS
                     | expression RELOP expression
 
 expression:         expression ADDOP term
@@ -57,9 +54,11 @@ expression:         expression ADDOP term
 term:               term MULOP factor
                     | factor
 
-factor:             "("expression ")"
-                    | CAST "("expression ")"
+factor:             LEFT_PRNTSS expression RIGHT_PRNTSS
+                    | CAST LEFT_PRNTSS expression RIGHT_PRNTSS
                     | ID
                     | NUM
 
 epsilon:            
+%declare COMMA COLON SEMICOLON LEFT_PRNTSS LEFT_BRCKT RIGHT_BRCKT RIGHT_PRNTSS EQUALS
+%declare INT FLOAT ID NUM ADDOP MULOP RELOP AND OR NOT BREAK IF ELSE WHILE SWITCH CASE DEFAULT INPUT OUTPUT CAST
