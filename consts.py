@@ -36,4 +36,4 @@ TOKEN_NAME_TYPE_FLOAT       = "FLOAT"
 TOKEN_NAME_NUM              = "NUM"
 
 # Others
-GRAMMAR_FILE_PATH           = "D:\\Projects\\Compilers Course\\20364-compiler\\cpl.lark"
+GRAMMAR_FILE_PATH           = "cpl.lark"

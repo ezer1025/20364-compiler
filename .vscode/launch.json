@@ -11,7 +11,7 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": ["D:\\Projects\\Compilers Course\\20364-compiler\\tests\\cnv.qud"]
+            "args": ["D:\\Projects\\Compilers Course\\20364-compiler\\tests\\cnv.cpl"]
         }
     ]
 }
