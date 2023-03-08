@@ -57,6 +57,9 @@ def compile(input):
     
     errors, ir = get_ir(ast, symbol_table)
 
+    if errors:
+        return errors, []
+
     quad = get_quad(ir)
     
     return [], quad
@@ -95,7 +98,7 @@ def add_cpl_symbols(lexer):
 
     lexer.add_token(PatternToken("int", lambda _: MatchedToken(TOKEN_NAME_TYPE_INT, "int", "")))
     lexer.add_token(PatternToken("float", lambda _: MatchedToken(TOKEN_NAME_TYPE_FLOAT, "float", "")))
-    lexer.add_token(PatternToken("[a-zA-Z][a-zA-Z0-9]*", lambda matched_string: MatchedToken(TOKEN_NAME_ID, matched_string, matched_string)))
+    lexer.add_token(PatternToken(r"[a-zA-Z][a-zA-Z0-9]*", lambda matched_string: MatchedToken(TOKEN_NAME_ID, matched_string, matched_string)))
 
     lexer.add_token(PatternToken(r"\d+", lambda matched_string: MatchedToken(TOKEN_NAME_NUM, matched_string, int(matched_string))))
     lexer.add_token(PatternToken(r"\d+\.\d+", lambda matched_string: MatchedToken(TOKEN_NAME_NUM, matched_string, float(matched_string))))
