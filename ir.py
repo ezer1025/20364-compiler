@@ -128,7 +128,7 @@ class CPLAST2IR(Transformer):
         return BreakStatement(tree)
     
     def epsilon(self, tree):
-        return Epsilon(tree)
+        pass
     
 
 class GrammarVariable:
@@ -160,6 +160,8 @@ class GrammarVariable:
         self.code.append(QuadInstruction(tree[1].value, self.type, self.value, tree[0].value, tree[2].value))
     
     def fix_binary_operands_types(self, tree):
+        # makes sure that both operands are of the same type, and casting one of them if needed
+
         self.code = tree[0].code
         self.code.extend(tree[2].code)
         self.value = TemporaryVariableFactory.get()
@@ -168,18 +170,19 @@ class GrammarVariable:
         right_operand = tree[2].value
 
         if tree[0].type != tree[2].type:
+            # if they are of different types, the result must be FLOAT and one of them must be INT
             self.type = SymbolTable.Types.FLOAT
             temporary_variable = TemporaryVariableFactory.get()
+
+            # choosing the right operand to convert according to its type (INT should be converted to FLOAT)
             conversion_operand = left_operand if tree[0].type == SymbolTable.Types.INT else right_operand
             self.code.append(QuadInstruction("CAST", self.type, temporary_variable, conversion_operand, ""))
+
+            # rewriting the subtrees values according to the converted variable
             tree[0].value, tree[2].value = (temporary_variable, right_operand) if tree[0].type == SymbolTable.Types.INT else (left_operand, temporary_variable)
+            tree[0].type = tree[2].type = self.type
         else:
             self.type = tree[0].type
-
-class Epsilon(GrammarVariable):
-    NODE_TYPE = GrammarVariable.NODE_TYPES.EPSILON
-    def __init__(self, tree):
-        super().__init__()
 
 class Program(GrammarVariable):
     def __init__(self, tree):
@@ -188,6 +191,7 @@ class Program(GrammarVariable):
         self.breaks = self.breaks.union(tree[1].breaks)
         self.code = tree[1].code + [QuadInstruction("halt", SymbolTable.Types.INT, "", "", "")]
 
+        # we recorded every appearance of break statement out of while/switch statements and now we need to report their appearance
         for _break in self.breaks:
             self.errors.append(SemanticException("Unexpected 'break' statement (outside of 'while'/'switch' statement)", _break.line))
 
@@ -221,8 +225,10 @@ class AssignmentStatement(GrammarVariable):
     def __init__(self, tree, symbol_table):
         super().__init__()
 
+        # reusing the Factor code to resolve the variable from the symbol table
         id = Factor(tree, symbol_table)
 
+        # cannot assign float to integer variable
         if id.type == SymbolTable.Types.INT and tree[2].type == SymbolTable.Types.FLOAT:
             self.errors = [SemanticException("Unable to assign floating point number to integer variable", tree[1].line)]
             self.code = []
@@ -233,6 +239,7 @@ class AssignmentStatement(GrammarVariable):
 
             self.code = tree[2].code
             
+            # if they are of different type, we should convert the assigned expression to FLOAT
             if id.type == SymbolTable.Types.FLOAT and tree[2].type == SymbolTable.Types.INT:
                 temporary_variable = TemporaryVariableFactory.get()
                 left_operand = temporary_variable
@@ -244,6 +251,7 @@ class InputStatement(GrammarVariable):
     def __init__(self, tree, symbol_table):
         super().__init__()
 
+        # reusing the Factor code to resolve the variable from the symbol table
         tree[2] = Factor([tree[2]], symbol_table)
         self.type = tree[2].type
         self.code = tree[2].code
@@ -268,9 +276,12 @@ class IfStatement(GrammarVariable):
         false_stmt_label = uuid.uuid4().hex
         end_stmt_label = uuid.uuid4().hex
 
+        # adding every break statement which don't belong to while/swith statement
         self.breaks = self.breaks.union(tree[4].breaks)
         self.breaks = self.breaks.union(tree[6].breaks)
 
+        # Appearance list: Condition code, jump to the "Else statement" if the condition does not met, true statement, jump to the end of the if after the true statement
+        #   placeholder for the calculation of the "Else statement" conditional jump, "else statement" code and a placeholder for the calculation of the end of the if
         self.code = (
             tree[2].code +
             [QuadInstruction("jump_zero", SymbolTable.Types.INT, false_stmt_label, tree[2].value, "")] +
@@ -287,9 +298,12 @@ class WhileStatement(GrammarVariable):
         condition_label = uuid.uuid4().hex
         end_while_label = uuid.uuid4().hex
 
+        # adding for every appearace of break statement the end of the while placeholding label to be calculated later as the jump offset
         for _break in tree[4].breaks:
             _break.label = end_while_label
 
+        # Appearance list: start of the while placeholder for the calculation of the repeating condition, condition code, conditional jump to the end of the while-loop,
+        #   true statement code, jump to the start of the condition code, placeholder for the end of the while-loop
         self.code = (
             [QuadInstruction("label", SymbolTable.Types.INT, condition_label, "", "")] +
             tree[2].code +
@@ -306,31 +320,42 @@ class SwitchStatement(GrammarVariable):
         if tree[2].type != SymbolTable.Types.INT:
             self.errors = [SemanticException("Invalid switch condition - must be of an integer value", tree[0].line)] 
         else:
+            # creating placeholders for each condition, the default and the end of the switch
             end_stmt_label = uuid.uuid4().hex
             default_stmt_label = uuid.uuid4().hex
             conditions_labels = { case_number: uuid.uuid4().hex for case_number in tree[5].cases }
 
             listed_cases = list(tree[5].cases)
 
+            # the condition code
+            self.code = tree[2].code
+
+            # temporary variable to check the whether the condition is met
+            temporary_variable = TemporaryVariableFactory.get()
+
             for index, (key, value) in enumerate(tree[5].cases):
-                temporary_variable = TemporaryVariableFactory.get()
+                # placeholder of the current condition and a checking if the condition is met
                 self.code.extend([QuadInstruction("label", SymbolTable.Types.INT, conditions_labels[key], "", ""), 
                                   QuadInstruction("==", SymbolTable.Types.INT, temporary_variable, tree[2].value, key)])
                 
+                # if there are more conditions to check, create a conditional jump to the next condition, otherwise to the default condition
                 if index + 1 == len(tree[5].cases):
                     self.code.append(QuadInstruction("jump_zero", SymbolTable.Types.INT, default_stmt_label, temporary_variable, ""))
                 else:
                     next_key, _ = listed_cases[index + 1]
                     self.code.append(QuadInstruction("jump_zero", SymbolTable.Types.INT, conditions_labels[next_key], "", ""))
                 
+                # add the case code so if the condition is met, the case code will be executed
                 self.code += value.code
             
+            # add a placeholder for the default case, the default case code and the end of the switch statement to be jumped by break statements
             self.code += (
                 [QuadInstruction("label", SymbolTable.Types.INT, default_stmt_label, "", "")] +
                 tree[8].code +
                 [QuadInstruction("label", SymbolTable.Types.INT, end_stmt_label, "", "")]
             )
 
+            # update all the break appearances with the placeholder of the end of the switch to be jumped
             for _break in tree[5].breaks.union(tree[8].breaks):
                 _break.label = end_stmt_label
 
@@ -342,12 +367,14 @@ class Caselist(GrammarVariable):
         super().__init__()
         self.code = []
         
-        self.cases = {}
 
+        # if the leftmost subtree is caselist, that means that we are not in the caselist->epsilon rule
         if tree[0].get_node_type() == GrammarVariable.NODE_TYPES.NODE_TYPE_CASE_LIST:
+            self.cases = {}
             self.breaks = self.breaks.union(tree[0].breaks)
             self.breaks = self.breaks.union(tree[4].breaks)
 
+            # reusing the Factor code to resolve the case number
             case_number = Factor([tree[2]], symbol_table)
 
             if case_number.type != SymbolTable.Types.INT:
@@ -442,6 +469,7 @@ class Factor(GrammarVariable):
         if self.type != tree[2].type:
             self.code.append(QuadInstruction(tree[0].type, self.type, self.value, tree[2].value, ""))
         else:
+            # if they are of the same type, it is just an assignment
             self.code.append(QuadInstruction("=", self.type, self.value, tree[2].value, ""))
                 
 
@@ -462,6 +490,8 @@ class BoolExpression(GrammarVariable):
 
     def _handle_or(self, tree):
         self.fix_binary_operands_types(tree)
+
+        # to check if one of them is not zero, we can check if their sum isn't zero, all the numbers are non-negative
         self.code.extend([QuadInstruction("+", self.type, self.value, tree[0].value, tree[2].value), 
                           QuadInstruction(">", SymbolTable.Types.INT, self.value, self.value, 0)])
 
@@ -483,6 +513,8 @@ class BoolTerm(GrammarVariable):
     def _handle_and(self, tree):
         self.fix_binary_operands_types(tree)
         temporary_variable = TemporaryVariableFactory.get()
+
+        # to check if both aren't zero, we can check if both equal 1
         self.code.extend([QuadInstruction("==", self.type, temporary_variable, tree[0].value, 1), 
                           QuadInstruction("==", self.type, self.value, tree[2].value, temporary_variable)])
 
@@ -493,6 +525,7 @@ class BoolFactor(GrammarVariable):
         super().__init__()
 
         try:
+            # if we can get the node type, that means it is an expression, otherwise it is the NOT terminal
             _ = tree[0].get_node_type()
 
             if tree[1].value == ">=":
@@ -500,6 +533,7 @@ class BoolFactor(GrammarVariable):
                 self.value = TemporaryVariableFactory.get()
                 temporary_variable = TemporaryVariableFactory.get()
                 
+                # we check whether they are equal OR (with the same logic of _handle_or) one is bigger than the other
                 self.code.extend([
                     QuadInstruction("==", tree[0].type, temporary_variable, tree[0].value, tree[2].value),
                     QuadInstruction(">", tree[0].type, self.value, tree[0].value, tree[2].value),
@@ -511,6 +545,7 @@ class BoolFactor(GrammarVariable):
                 self.value = TemporaryVariableFactory.get()
                 temporary_variable = TemporaryVariableFactory.get()
 
+                # we check whether they are equal OR (with the same logic of _handle_or) one is smaller than the other
                 self.code.extend([
                     QuadInstruction("==", tree[0].type, temporary_variable, tree[0].value, tree[2].value),
                     QuadInstruction("<", tree[0].type, self.value, tree[0].value, tree[2].value),

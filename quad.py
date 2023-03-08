@@ -8,6 +8,7 @@ def get_quad(ir):
 
     quad = []
 
+    # removing every label placeholder and registering its line number to alter the jumps
     for instruction in ir:
         if instruction.operator == "label":
             labels_dictionary[instruction.destination] = line_number
@@ -17,6 +18,7 @@ def get_quad(ir):
     
     result = []
 
+    # altering the jumps to have offset instead of label placeholders
     for instruction in quad:
         if instruction.operator == "jump":
             result.append(QuadInstruction("jump", SymbolTable.Types.INT, labels_dictionary[instruction.destination], "", ""))

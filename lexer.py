@@ -66,14 +66,14 @@ class Tokenizer:
         while self.cursor < len(self.input):
             current_token_match_list = []
             for pattern_token in self.pattern_tokens:
-                input = self.input[self.cursor:]
-                result = pattern_token.match_and_handle(input)
+                result = pattern_token.match_and_handle(self.input[self.cursor:])
                 if result:
                     current_token_match_list.append(result)
 
+            # search for the longest matched string from the matched string list to be selected as the right token
             final_token = max(current_token_match_list, key=lambda t: len(t.lexeme))
-
             self.cursor += len(final_token.lexeme)
+
             if final_token.name != TOKEN_NAME_IGNORE_TOKEN:
                 match_tokens.append((final_token, self.line_number))
         

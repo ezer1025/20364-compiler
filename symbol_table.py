@@ -16,11 +16,14 @@ class SymbolTableVisitor(Visitor):
     def _init_declaration_list(self):
         self.current_declaration_type = None
         self.found_type = False
+
+        # keeping the previous variables that were derived after the end of declaration rule and adding them to the new declaration
         self.current_declaration_vars = [(var[0], False) for var in self.current_declaration_vars if var[1] == True]
     
-    def declaration(self, tree):
+    def declaration(self, _):
         for variable, found_type in self.current_declaration_vars:
             try:
+                # if the variable was added before the type definition
                 if not found_type:
                     self.symbol_table.try_add_symbol(variable.value, self.current_declaration_type, variable.line)
             except SymbolRedefenitionException as e:
