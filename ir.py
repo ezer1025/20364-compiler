@@ -207,7 +207,7 @@ class StatementList(GrammarVariable):
         super().__init__()
 
         try:
-            tree[0].get_node_type()
+            _ = tree[0].get_node_type()
             self.code = tree[0].code + tree[1].code
             self.breaks = self.breaks.union(tree[0].breaks)
             self.breaks = self.breaks.union(tree[1].breaks)
@@ -369,7 +369,7 @@ class Caselist(GrammarVariable):
         
         try:
             # if the leftmost subtree is caselist, that means that we are not in the caselist->epsilon rule
-            tree[0].get_node_type()
+            _ = tree[0].get_node_type()
             self.cases = {}
             self.breaks = self.breaks.union(tree[0].breaks)
             self.breaks = self.breaks.union(tree[4].breaks)
