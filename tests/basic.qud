@@ -1,9 +1,0 @@
-RINP a
-RINP b
-RLSS t0 a b
-JMPZ 7 t0
-RPRT a
-JUMP 8
-RPRT b
-HALT
-Enosh Zerahia

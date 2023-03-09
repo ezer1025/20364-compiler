@@ -142,8 +142,6 @@ class GrammarVariable:
 
         NODE_TYPE_STATEMENT_LIST = 7
         NODE_TYPE_CASE_LIST = 8
-
-        EPSILON = 9
         
     def __init__(self):
         self.errors = []
@@ -204,14 +202,16 @@ class StatementBlock(GrammarVariable):
 
 class StatementList(GrammarVariable):
     NODE_TYPE = GrammarVariable.NODE_TYPES.NODE_TYPE_STATEMENT_LIST
+
     def __init__(self, tree):
         super().__init__()
 
-        if tree[0].get_node_type() == GrammarVariable.NODE_TYPES.NODE_TYPE_STATEMENT_LIST:
+        try:
+            tree[0].get_node_type()
             self.code = tree[0].code + tree[1].code
             self.breaks = self.breaks.union(tree[0].breaks)
             self.breaks = self.breaks.union(tree[1].breaks)
-        else:
+        except:
             self.code = []
 
 class Statement(GrammarVariable):
@@ -367,9 +367,9 @@ class Caselist(GrammarVariable):
         super().__init__()
         self.code = []
         
-
-        # if the leftmost subtree is caselist, that means that we are not in the caselist->epsilon rule
-        if tree[0].get_node_type() == GrammarVariable.NODE_TYPES.NODE_TYPE_CASE_LIST:
+        try:
+            # if the leftmost subtree is caselist, that means that we are not in the caselist->epsilon rule
+            tree[0].get_node_type()
             self.cases = {}
             self.breaks = self.breaks.union(tree[0].breaks)
             self.breaks = self.breaks.union(tree[4].breaks)
@@ -387,6 +387,8 @@ class Caselist(GrammarVariable):
                 else:
                     self.cases[case_number.value] = tree[4]
                     self.code = tree[0].code + tree[4].code
+        except:
+            pass
 
 class BreakStatement(GrammarVariable):
     def __init__(self, tree):
